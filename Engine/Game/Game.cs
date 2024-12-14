@@ -24,7 +24,7 @@ namespace Engine.Game
         private LightComponent DirectionalLight;
         public override void Awake()
         {
-            Debug = true;
+            //Debug = true;
         }
         public override void Start()
         {
@@ -91,7 +91,7 @@ namespace Engine.Game
         {
             PlayerEntity = ECSManager.Instance.CreateEntity();
 
-            PlayerEntity.Transform.Position = Vector3.Up * 50;
+            PlayerEntity.Transform.Position = Vector3.Up * 100;
             Player Controller = new Player()
             {
                 CameraObj = ECSManager.Instance.GetComponent<Camera>(CameraEntity),
