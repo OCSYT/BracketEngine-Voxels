@@ -23,9 +23,49 @@ namespace Engine.Components
         private MeshRenderer renderer;
         public short[,,] chunkData = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
 
+        int TextureLookUp(int BlockID, Face Face)
+        {
+            if(BlockID == 1) //Grass
+            {
+                if (Face == Face.Top)
+                {
+                    return 0;
+                }
+                else if (Face == Face.Bottom)
+                {
+                    return 2;
+                }
+                else if (Face == Face.Left)
+                {
+                    return 3;
+                }
+                else if (Face == Face.Right)
+                {
+                    return 3;
+                }
+                else if (Face == Face.Front)
+                {
+                    return 3;
+                }
+                else if (Face == Face.Back)
+                {
+                    return 3;
+                }
+                else
+                {
+                    return 0;
+                }
+            }
+            else
+            {
+                return BlockID;
+            }
+        }
+
         public override void Start()
         {
-            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseColor = Color.Green }]);
+            Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
+            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
             GenerateTerrain();
             Console.WriteLine("Created chunk at position: " + Transform.Position);
@@ -80,7 +120,7 @@ namespace Engine.Components
 
                             foreach (var face in exposedFaces)
                             {
-                                var (voxelVertices, voxelIndices) = CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face);
+                                var (voxelVertices, voxelIndices) = CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, TextureLookUp(chunkData[x,y,z], face));
                                 vertices.AddRange(voxelVertices);
                                 for (int i = 0; i < voxelIndices.Length; i++)
                                 {
@@ -186,7 +226,7 @@ namespace Engine.Components
             }
         }
 
-        public (VertexPositionNormalTexture[], short[]) CreateVoxel(Vector3 position, Vector3 scale, Face face)
+        public (VertexPositionNormalTexture[], short[]) CreateVoxel(Vector3 position, Vector3 scale, Face face, int texPos, int texSize = 16, int atlasSize = 256)
         {
             float width = scale.X / 2;
             float height = scale.Y / 2;
@@ -199,6 +239,19 @@ namespace Engine.Components
             Vector3 normal;
             bool flip = false;
 
+            float texUnit = 1f / atlasSize;
+            float uStart = (texPos * texSize  % atlasSize) * texUnit;
+            float vStart = (texPos * texSize / atlasSize) * texUnit;
+            float uEnd = uStart + texUnit * texSize;
+            float vEnd = vStart + texUnit * texSize;
+
+            // UV coordinates
+            Vector2 uv1 = new Vector2(uStart, vEnd);
+            Vector2 uv2 = new Vector2(uEnd, vEnd);
+            Vector2 uv3 = new Vector2(uEnd, vStart);
+            Vector2 uv4 = new Vector2(uStart, vStart);
+
+            // Determine the face configuration
             switch (face)
             {
                 case Face.Front:
@@ -250,23 +303,25 @@ namespace Engine.Components
                     throw new ArgumentException("Invalid face value", nameof(face));
             }
 
+            // Assign vertices based on flip
             if (flip)
             {
-                vertices[0] = new VertexPositionNormalTexture(position + offset4, normal, new Vector2(0, 1));
-                vertices[1] = new VertexPositionNormalTexture(position + offset3, normal, new Vector2(1, 1));
-                vertices[2] = new VertexPositionNormalTexture(position + offset2, normal, new Vector2(1, 0));
-                vertices[3] = new VertexPositionNormalTexture(position + offset1, normal, new Vector2(0, 0));
+                vertices[0] = new VertexPositionNormalTexture(position + offset4, normal, uv4);
+                vertices[1] = new VertexPositionNormalTexture(position + offset3, normal, uv3);
+                vertices[2] = new VertexPositionNormalTexture(position + offset2, normal, uv2);
+                vertices[3] = new VertexPositionNormalTexture(position + offset1, normal, uv1);
             }
             else
             {
-                vertices[0] = new VertexPositionNormalTexture(position + offset1, normal, new Vector2(0, 1));
-                vertices[1] = new VertexPositionNormalTexture(position + offset2, normal, new Vector2(1, 1));
-                vertices[2] = new VertexPositionNormalTexture(position + offset3, normal, new Vector2(1, 0));
-                vertices[3] = new VertexPositionNormalTexture(position + offset4, normal, new Vector2(0, 0));
+                vertices[0] = new VertexPositionNormalTexture(position + offset1, normal, uv1);
+                vertices[1] = new VertexPositionNormalTexture(position + offset2, normal, uv2);
+                vertices[2] = new VertexPositionNormalTexture(position + offset3, normal, uv3);
+                vertices[3] = new VertexPositionNormalTexture(position + offset4, normal, uv4);
             }
 
             return (vertices, indices);
         }
+
 
         public enum Face
         {

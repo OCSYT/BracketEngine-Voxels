@@ -53,6 +53,7 @@ namespace Engine.Game
         public override void Render(GameTime GameTime)
         {
             Graphics.GraphicsDevice.Clear(Color.CornflowerBlue);
+            EngineManager.Instance.GraphicsDevice.SamplerStates[0] = SamplerState.PointClamp;
             BasicEffect Effect = new BasicEffect(Graphics.GraphicsDevice) { AmbientLightColor = Vector3.One / 4 };
             Camera CameraObj = ECSManager.Instance.GetComponent<Camera>(CameraEntity);
 

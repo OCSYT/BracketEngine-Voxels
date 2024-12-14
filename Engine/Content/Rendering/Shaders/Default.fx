@@ -110,7 +110,7 @@ float4 PS(VertexOutput input) : COLOR
     float4 finalColor = (textureColor * DiffuseColor * Light)
     + (emissiontexColor * EmissionColor);
 
-    return float4(finalColor.rgb, clamp(finalColor.a, 0, 1) * Alpha);
+    return float4(finalColor.rgb, clamp(finalColor.a, 0, 1) * Alpha * textureColor.a);
 }
 
 technique BasicShader

@@ -16,7 +16,6 @@ namespace Engine.Core.Rendering
         public Dictionary<string, object> ShaderParams { get; set; } = new Dictionary<string, object>();
         public static Material Default { get; } = new Material();
         public float Alpha { get; set; } = 1;
-        public bool Transparent { get; set; } = false;
         public bool Lighting { get; set; } = true;
         public Material()
         {
@@ -37,7 +36,6 @@ namespace Engine.Core.Rendering
             EmissionColor = emissive == default ? Color.Black : emissive;
             Shader = shader;
             Alpha = alpha;
-            Transparent = transparent;
             Lighting = lighting;
         }
 
@@ -117,14 +115,7 @@ namespace Engine.Core.Rendering
             else
             {
                 effect.Parameters["Lighting"]?.SetValue(Lighting ? 1 : 0);
-                if (Transparent)
-                {
-                    effect.Parameters["Alpha"]?.SetValue(Alpha);
-                }
-                else
-                {
-                    effect.Parameters["Alpha"]?.SetValue(1);
-                }
+                effect.Parameters["Alpha"]?.SetValue(Alpha);
                 if (DiffuseTexture != null)
                 {
                     effect.Parameters["DiffuseTexture"]?.SetValue(DiffuseTexture);
