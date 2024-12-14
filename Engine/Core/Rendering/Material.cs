@@ -17,6 +17,8 @@ namespace Engine.Core.Rendering
         public static Material Default { get; } = new Material();
         public float Alpha { get; set; } = 1;
         public bool Lighting { get; set; } = true;
+        public bool Transparent = false;
+        public int SortOrder;
         public Material()
         {
         }
@@ -42,8 +44,25 @@ namespace Engine.Core.Rendering
         public void ApplyEffectParameters(Effect effect, bool fallback)
         {
             if (effect == null) return;
-
-            EngineManager.Instance.GraphicsDevice.BlendState = BlendState.AlphaBlend;
+            if (SortOrder == 0 || SortOrder == 1)
+            {
+                if (Transparent)
+                {
+                    SortOrder = 1;
+                }
+                else
+                {
+                    SortOrder = 0;
+                }
+            }
+            if (Transparent)
+            {
+                EngineManager.Instance.GraphicsDevice.BlendState = BlendState.AlphaBlend;
+            }
+            else
+            {
+                EngineManager.Instance.GraphicsDevice.BlendState = BlendState.Opaque;
+            }
             if (!fallback)
             {
                 try
@@ -137,7 +156,6 @@ namespace Engine.Core.Rendering
 
             }
         }
-
 
     }
 }

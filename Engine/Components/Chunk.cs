@@ -21,52 +21,75 @@ namespace Engine.Components
 
         public ChunkManager Manager;
         private MeshRenderer renderer;
+        private MeshRenderer rendererTransparent;
         public short[,,] chunkData = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
 
         int TextureLookUp(int BlockID, Face Face)
         {
-            if(BlockID == 1) //Grass
+            if (BlockID == 1) // Grass
             {
-                if (Face == Face.Top)
+                return Face switch
                 {
-                    return 0;
-                }
-                else if (Face == Face.Bottom)
-                {
-                    return 2;
-                }
-                else if (Face == Face.Left)
-                {
-                    return 3;
-                }
-                else if (Face == Face.Right)
-                {
-                    return 3;
-                }
-                else if (Face == Face.Front)
-                {
-                    return 3;
-                }
-                else if (Face == Face.Back)
-                {
-                    return 3;
-                }
-                else
-                {
-                    return 0;
-                }
+                    Face.Top => 0,
+                    Face.Bottom => 2,
+                    _ => 3,
+                };
             }
-            else
+            if(BlockID == 2) // Dirt
             {
-                return BlockID;
+                return 2;
             }
+            if(BlockID == 3) //Stone
+            {
+                return 1;
+            }
+            if(BlockID == 4) //Sand
+            {
+                return 18;
+            }
+            if(BlockID == 5) //Log
+            {
+                return Face switch
+                {
+                    Face.Top => 21,
+                    Face.Bottom => 21,
+                    _ => 20,
+                };
+            }
+            if (BlockID == 6) //Leaves
+            {
+                return 52;
+            }
+            if(BlockID == 7) //Oak Planks
+            {
+                return 4;
+            }
+            if(BlockID == 8) //Water
+            {
+                return 223;
+            }
+            return BlockID;
+        }
+        bool TransparentLookUp(int BlockID)
+        {
+            if(BlockID == 6)
+            {
+                return true;
+            }
+            if(BlockID == 8)
+            {
+                return true;
+            }
+            return false;
         }
 
         public override void Start()
         {
             Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
             renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex }]);
+            rendererTransparent = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex, Transparent = true }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
+            ECSManager.Instance.AddComponent(Entity, rendererTransparent);
             GenerateTerrain();
             Console.WriteLine("Created chunk at position: " + Transform.Position);
         }
@@ -79,10 +102,13 @@ namespace Engine.Components
         public void GenerateTerrain()
         {
             Noise simplexNoise = new Noise();
+            int Seed = (int)Transform.Position.X + (int)Transform.Position.Z;
+
+
             float noiseScale = 0.005f;
             float noiseHeight = 0.1f;
-
-            Parallel.For(0, (int)ChunkBounds.X, x =>
+            float WaterLevel = (ChunkBounds.Y / 2) + 10;
+            for (int x = 0; x < ChunkBounds.X; x++)
             {
                 for (int z = 0; z < ChunkBounds.Z; z++)
                 {
@@ -93,20 +119,108 @@ namespace Engine.Components
 
                     height = Math.Clamp(height, 0, ChunkBounds.Y - 1);
 
-                    for (short y = 0; y < ChunkBounds.Y; y++)
+                    for (int y = 0; y < ChunkBounds.Y; y++)
                     {
-                        chunkData[x, y, z] = (y <= height) ? (short)1 : (short)0;
+
+                        if (y <= height)
+                        {
+                            if(y > height-1)
+                            {
+                                if(y <= WaterLevel)
+                                {
+                                    chunkData[x, y, z] = 4;
+                                }
+                                else
+                                {
+                                    chunkData[x, y, z] = 1;
+                                }
+                            }
+                            else
+                            {
+                                chunkData[x, y, z] = 2;
+                            }
+                        }
+                        else if (y <= WaterLevel)
+                        {
+                            chunkData[x, y, z] = 8;
+                        }
+                        else
+                        {
+                            chunkData[x, y, z] = 0;
+                        }
                     }
                 }
-            });
+            }
+
+            Random random = new Random(Seed);
+            for (int x = 0; x < ChunkBounds.X; x++)
+            {
+                for (int z = 0; z < ChunkBounds.Z; z++)
+                {
+                    for (int y = 0; y < ChunkBounds.Y; y++)
+                    {
+                        if(chunkData[x, y, z] == 1)
+                        {
+                            PlaceTree(x,y,z, random);
+                        }
+                    }
+                }
+            }
+
             GenerateChunk(true);
         }
+        private void PlaceTree(int x, int y, int z, Random random)
+        {
+            int treeHeight = 7;
+            int trunkHeight = 3;
+            int treeWidth = 2;
+            int chunkSize = (int)ChunkBounds.X;
+            int chunkSizeY = (int)ChunkBounds.Y;
+
+            if (y + treeHeight < chunkSizeY &&
+                x + treeWidth < chunkSize && z + treeWidth < chunkSize &&
+                x - treeWidth > 0 && z - treeWidth > 0 &&
+                random.NextDouble() > 0.99)
+            {
+                for (int i = y + 1; i < y + 1 + trunkHeight; i++)
+                {
+                    if (chunkData[x, i, z] == 0)
+                    {
+                        chunkData[x, i, z] = 5;
+                    }
+                }
+
+                for (int offsetY = y + trunkHeight + 1; offsetY < y + treeHeight; offsetY++)
+                {
+                    int currentRadius = Math.Clamp(treeWidth - (offsetY - (y + trunkHeight + 1)), 1, chunkSize);
+                    for (int offsetX = -currentRadius; offsetX <= currentRadius; offsetX++)
+                    {
+                        for (int offsetZ = -currentRadius; offsetZ <= currentRadius; offsetZ++)
+                        {
+                            bool isCornerOrEdge = Math.Abs(offsetX) == currentRadius && Math.Abs(offsetZ) == currentRadius;
+
+                            if (!isCornerOrEdge && chunkData[x + offsetX, offsetY, z + offsetZ] == 0)
+                            {
+                                chunkData[x + offsetX, offsetY, z + offsetZ] = 6;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
 
         public void GenerateChunk(bool updateNeighbors)
         {
-            List<VertexPositionNormalTexture> vertices = new List<VertexPositionNormalTexture>();
-            List<short> indices = new List<short>();
+            List<VertexPositionNormalTexture> verticesOpaque = new List<VertexPositionNormalTexture>();
+            List<short> indicesOpaque = new List<short>();
+            List<VertexPositionNormalTexture> verticesTransparent = new List<VertexPositionNormalTexture>();
+            List<short> indicesTransparent = new List<short>();
+
             int totalVertexCount = 0;
+
+            int totalVertexCountTransparent = 0;
+
 
             for (int x = 0; x < ChunkBounds.X; x++)
             {
@@ -117,25 +231,44 @@ namespace Engine.Components
                         if (chunkData[x, y, z] != 0)
                         {
                             List<Face> exposedFaces = GetExposedFaces(x, y, z);
-
                             foreach (var face in exposedFaces)
                             {
-                                var (voxelVertices, voxelIndices) = CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, TextureLookUp(chunkData[x,y,z], face));
-                                vertices.AddRange(voxelVertices);
-                                for (int i = 0; i < voxelIndices.Length; i++)
+                                int texPos = TextureLookUp(chunkData[x, y, z], face);
+                                bool isTransparent = TransparentLookUp(chunkData[x, y, z]);
+
+                                var (voxelVertices, voxelIndices) = CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, texPos);
+                                if (isTransparent)
                                 {
-                                    indices.Add((short)(voxelIndices[i] + totalVertexCount));
+                                    verticesTransparent.AddRange(voxelVertices);
+                                    foreach (var idx in voxelIndices)
+                                    {
+                                        indicesTransparent.Add((short)(idx + totalVertexCountTransparent));
+                                    }
+                                    totalVertexCountTransparent += voxelVertices.Length;
                                 }
-                                totalVertexCount += voxelVertices.Length;
+                                else
+                                {
+                                    verticesOpaque.AddRange(voxelVertices);
+                                    foreach (var idx in voxelIndices)
+                                    {
+                                        indicesOpaque.Add((short)(idx + totalVertexCount));
+                                    }
+                                    totalVertexCount += voxelVertices.Length;
+                                }
                             }
                         }
                     }
                 }
             }
 
-            if (vertices.Count > 0)
+            if (verticesOpaque.Count > 0)
             {
-                renderer.StaticMesh = PrimitiveModel.CreateStaticMesh(vertices.ToArray(), indices.ToArray());
+                renderer.StaticMesh = PrimitiveModel.CreateStaticMesh(verticesOpaque.ToArray(), indicesOpaque.ToArray());
+            }
+
+            if (verticesTransparent.Count > 0)
+            {
+                rendererTransparent.StaticMesh = PrimitiveModel.CreateStaticMesh(verticesTransparent.ToArray(), indicesTransparent.ToArray());
             }
 
             if (updateNeighbors)
@@ -143,6 +276,7 @@ namespace Engine.Components
                 UpdateNeighborChunks();
             }
         }
+
 
         private void UpdateNeighborChunks()
         {
@@ -171,6 +305,7 @@ namespace Engine.Components
 
         private List<Face> GetExposedFaces(int x, int y, int z)
         {
+            bool IsTransparent = TransparentLookUp(chunkData[x, y, z]);
             List<Face> exposedFaces = new List<Face>();
             if (y - 1 < 0)
             {
@@ -182,49 +317,49 @@ namespace Engine.Components
             }
             else
             {
-                if (IsVisible(x, y - 1, z)) exposedFaces.Add(Face.Bottom);
-                if (IsVisible(x, y, z + 1)) exposedFaces.Add(Face.Back);
+                if (IsVisible(x, y - 1, z, IsTransparent)) exposedFaces.Add(Face.Bottom);
+                if (IsVisible(x, y + 1, z, IsTransparent)) exposedFaces.Add(Face.Top);
             }
 
-            if (IsVisible(x + 1, y, z)) exposedFaces.Add(Face.Right);
-            if (IsVisible(x - 1, y, z)) exposedFaces.Add(Face.Left);
-            if (IsVisible(x, y + 1, z)) exposedFaces.Add(Face.Top);
-            if (IsVisible(x, y, z - 1)) exposedFaces.Add(Face.Front);
+            if (IsVisible(x + 1, y, z, IsTransparent)) exposedFaces.Add(Face.Right);
+            if (IsVisible(x - 1, y, z, IsTransparent)) exposedFaces.Add(Face.Left);
+            if (IsVisible(x, y, z + 1, IsTransparent)) exposedFaces.Add(Face.Back);
+            if (IsVisible(x, y, z - 1, IsTransparent)) exposedFaces.Add(Face.Front);
 
             return exposedFaces;
         }
 
-        private bool IsVisible(int x, int y, int z)
+        private bool IsVisible(int x, int y, int z, bool IsTransparent)
         {
             if (x >= 0 && x < ChunkBounds.X && y >= 0 && y < ChunkBounds.Y && z >= 0 && z < ChunkBounds.Z)
             {
-                return chunkData[x, y, z] == 0;
+                return chunkData[x, y, z] == 0 || (TransparentLookUp(chunkData[x, y, z]) && !IsTransparent);
             }
 
+            // Handle neighboring chunks
             int neighborChunkX = x < 0 ? -1 : x >= ChunkBounds.X ? 1 : 0;
             int neighborChunkZ = z < 0 ? -1 : z >= ChunkBounds.Z ? 1 : 0;
 
             Vector3 neighborChunkPos = Transform.Position + new Vector3(neighborChunkX * VoxelSize * ChunkBounds.X, 0, neighborChunkZ * VoxelSize * ChunkBounds.Z);
 
-            if (!Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
+            if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
             {
-                return false;
+                Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
+                if (neighborChunk != null)
+                {
+                    short localX = (short)((x + ChunkBounds.X) % ChunkBounds.X);
+                    short localY = (short)((y + ChunkBounds.Y) % ChunkBounds.Y);
+                    short localZ = (short)((z + ChunkBounds.Z) % ChunkBounds.Z);
+
+                    return neighborChunk.chunkData[localX, localY, localZ] == 0 || 
+                        TransparentLookUp(neighborChunk.chunkData[localX, localY, localZ])
+                        && !IsTransparent;
+                }
             }
 
-            Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
-            if (neighborChunk == null)
-            {
-                return false;
-            }
-            else
-            {
-                short localX = (short)((x + ChunkBounds.X) % ChunkBounds.X);
-                short localY = (short)((y + ChunkBounds.Y) % ChunkBounds.Y);
-                short localZ = (short)((z + ChunkBounds.Z) % ChunkBounds.Z);
-
-                return neighborChunk.chunkData[localX, localY, localZ] == 0;
-            }
+            return false;
         }
+
 
         public (VertexPositionNormalTexture[], short[]) CreateVoxel(Vector3 position, Vector3 scale, Face face, int texPos, int texSize = 16, int atlasSize = 256)
         {
@@ -239,11 +374,14 @@ namespace Engine.Components
             Vector3 normal;
             bool flip = false;
 
+            int column = (texPos % (atlasSize / texSize));
+            int row = (texPos / (atlasSize / texSize));
             float texUnit = 1f / atlasSize;
-            float uStart = (texPos * texSize  % atlasSize) * texUnit;
-            float vStart = (texPos * texSize / atlasSize) * texUnit;
-            float uEnd = uStart + texUnit * texSize;
-            float vEnd = vStart + texUnit * texSize;
+            float uStart = column * texSize * texUnit;
+            float vStart = row * texSize * texUnit;
+            float uEnd = uStart + texSize * texUnit;
+            float vEnd = vStart + texSize * texUnit;
+
 
             // UV coordinates
             Vector2 uv1 = new Vector2(uStart, vEnd);
