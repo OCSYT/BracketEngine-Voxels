@@ -23,7 +23,7 @@ namespace Engine.Components
         private MeshRenderer renderer;
         private MeshRenderer rendererTransparent;
         public short[,,] chunkData = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
-
+        public float WaterHeight = 10;
         int TextureLookUp(int BlockID, Face Face)
         {
             if (BlockID == 1) // Grass
@@ -68,6 +68,14 @@ namespace Engine.Components
             {
                 return 223;
             }
+            if(BlockID == 9) //Coblestone
+            {
+                return 16;
+            }
+            if (BlockID == 10) //Glass
+            {
+                return 49;
+            }
             return BlockID;
         }
         bool TransparentLookUp(int BlockID)
@@ -80,23 +88,47 @@ namespace Engine.Components
             {
                 return true;
             }
+            if (BlockID == 10)
+            {
+                return true;
+            }
             return false;
         }
+        bool CollisionLookUp(int BlockID)
+        {
+            if (BlockID == 0)
+            {
+                return false;
+            }
+            if (BlockID == 8)
+            {
+                return false;
+            }
+            return true;
+        }
 
-        public override void Start()
+        public bool IsVoxelSolid(Vector3 localPosition)
+        {
+            if (localPosition.X >= 0 && localPosition.X < ChunkBounds.X && localPosition.Y >= 0 && localPosition.Y < ChunkBounds.Y && localPosition.Z >= 0 && localPosition.Z < ChunkBounds.Z)
+            {
+                int BlockID = chunkData[(int)localPosition.X, (int)localPosition.Y, (int)localPosition.Z];
+                return CollisionLookUp(BlockID);
+            }
+            return false;
+        }
+        public override void Awake()
         {
             Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
             renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex }]);
             rendererTransparent = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex, Transparent = true }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
             ECSManager.Instance.AddComponent(Entity, rendererTransparent);
-            GenerateTerrain();
-            Console.WriteLine("Created chunk at position: " + Transform.Position);
+            //Console.WriteLine("Created chunk at position: " + Transform.Position);
         }
 
         public override void OnDestroy()
         {
-            Console.WriteLine("Destroyed chunk at position: " + Transform.Position);
+            //Console.WriteLine("Destroyed chunk at position: " + Transform.Position);
         }
 
         public void GenerateTerrain()
@@ -104,68 +136,70 @@ namespace Engine.Components
             Noise simplexNoise = new Noise();
             int Seed = (int)Transform.Position.X + (int)Transform.Position.Z;
 
-
-            float noiseScale = 0.005f;
-            float noiseHeight = 0.1f;
-            float WaterLevel = (ChunkBounds.Y / 2) + 10;
-            for (int x = 0; x < ChunkBounds.X; x++)
+            Task.Run(() =>
             {
-                for (int z = 0; z < ChunkBounds.Z; z++)
+                float noiseScale = 0.005f;
+                float noiseHeight = 0.1f;
+                float WaterLevel = (ChunkBounds.Y / 2) + WaterHeight;
+                for (int x = 0; x < ChunkBounds.X; x++)
                 {
-                    float worldVoxelPositionX = (Transform.Position.X + x * VoxelSize);
-                    float worldVoxelPositionZ = (Transform.Position.Z + z * VoxelSize);
-
-                    float height = ChunkBounds.Y / 2 + simplexNoise.CalcPixel2D((short)worldVoxelPositionX, (short)worldVoxelPositionZ, noiseScale) * noiseHeight;
-
-                    height = Math.Clamp(height, 0, ChunkBounds.Y - 1);
-
-                    for (int y = 0; y < ChunkBounds.Y; y++)
+                    for (int z = 0; z < ChunkBounds.Z; z++)
                     {
+                        float worldVoxelPositionX = (Transform.Position.X + x * VoxelSize);
+                        float worldVoxelPositionZ = (Transform.Position.Z + z * VoxelSize);
 
-                        if (y <= height)
+                        float height = ChunkBounds.Y / 2 + simplexNoise.CalcPixel2D((short)worldVoxelPositionX, (short)worldVoxelPositionZ, noiseScale) * noiseHeight;
+
+                        height = Math.Clamp(height, 0, ChunkBounds.Y - 1);
+
+                        for (int y = 0; y < ChunkBounds.Y; y++)
                         {
-                            if(y > height-1)
+
+                            if (y <= height)
                             {
-                                if(y <= WaterLevel)
+                                if (y > height - 1)
                                 {
-                                    chunkData[x, y, z] = 4;
+                                    if (y <= WaterLevel)
+                                    {
+                                        chunkData[x, y, z] = 4;
+                                    }
+                                    else
+                                    {
+                                        chunkData[x, y, z] = 1;
+                                    }
                                 }
                                 else
                                 {
-                                    chunkData[x, y, z] = 1;
+                                    chunkData[x, y, z] = 2;
                                 }
+                            }
+                            else if (y <= WaterLevel)
+                            {
+                                chunkData[x, y, z] = 8;
                             }
                             else
                             {
-                                chunkData[x, y, z] = 2;
+                                chunkData[x, y, z] = 0;
                             }
                         }
-                        else if (y <= WaterLevel)
-                        {
-                            chunkData[x, y, z] = 8;
-                        }
-                        else
-                        {
-                            chunkData[x, y, z] = 0;
-                        }
                     }
                 }
-            }
 
-            Random random = new Random(Seed);
-            for (int x = 0; x < ChunkBounds.X; x++)
-            {
-                for (int z = 0; z < ChunkBounds.Z; z++)
+                Random random = new Random(Seed);
+                for (int x = 0; x < ChunkBounds.X; x++)
                 {
-                    for (int y = 0; y < ChunkBounds.Y; y++)
+                    for (int z = 0; z < ChunkBounds.Z; z++)
                     {
-                        if(chunkData[x, y, z] == 1)
+                        for (int y = 0; y < ChunkBounds.Y; y++)
                         {
-                            PlaceTree(x,y,z, random);
+                            if (chunkData[x, y, z] == 1)
+                            {
+                                PlaceTree(x, y, z, random);
+                            }
                         }
                     }
                 }
-            }
+            });
 
             GenerateChunk(true);
         }
@@ -209,9 +243,144 @@ namespace Engine.Components
             }
         }
 
+        public void ChunkUpdate()
+        {
+            float WaterLevel = (ChunkBounds.Y / 2) + WaterHeight;
+
+            Parallel.For(0, (int)ChunkBounds.X, x =>
+            {
+                for (int z = 0; z < ChunkBounds.Z; z++)
+                {
+                    for (int y = 0; y < ChunkBounds.Y; y++)
+                    {
+                        if (chunkData[x, y, z] == 0)
+                        {
+                            bool hasWaterNeighbor = CheckForWaterNeighbor(x, y, z, WaterLevel);
+
+                            if (hasWaterNeighbor && y <= WaterLevel)
+                            {
+                                chunkData[x, y, z] = 8;
+                            }
+                        }
+                    }
+                }
+            });
+            Parallel.For(0, (int)ChunkBounds.X, i =>
+            {
+                int x = (int)ChunkBounds.X - 1 - i;
+                for (int z = 0; z < ChunkBounds.Z; z++)
+                {
+                    for (int y = 0; y < ChunkBounds.Y; y++)
+                    {
+                        if (chunkData[x, y, z] == 0)
+                        {
+                            bool hasWaterNeighbor = CheckForWaterNeighbor(x, y, z, WaterLevel);
+
+                            if (hasWaterNeighbor && y <= WaterLevel)
+                            {
+                                chunkData[x, y, z] = 8;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        private bool CheckForWaterNeighbor(int x, int y, int z, float WaterLevel)
+        {
+            Vector3[] directions =
+            {
+                Vector3.Left,
+                Vector3.Right,
+                Vector3.Down,
+                Vector3.Up,
+                Vector3.Backward,
+                Vector3.Forward
+            };
+
+            var waterBlock = 8;
+            var chunkSize = ChunkBounds.X;
+
+            for (int i = 0; i < directions.Length; i++)
+            {
+                Vector3 direction = directions[i];
+
+                int neighborX = (int)(x + direction.X);
+                int neighborY = (int)(y + direction.Y);
+                int neighborZ = (int)(z + direction.Z);
+
+                if (neighborX >= 0 && neighborX < chunkSize &&
+                    neighborY >= 0 && neighborY < ChunkBounds.Y &&
+                    neighborZ >= 0 && neighborZ < chunkSize)
+                {
+                    if (chunkData[neighborX, neighborY, neighborZ] == waterBlock)
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    int wrappedNeighborX = (int)((neighborX + chunkSize) % chunkSize);
+                    int wrappedNeighborZ = (int)((neighborZ + chunkSize) % chunkSize);
+
+                    Chunk neighborChunk = GetNeighborChunk(new Vector3(direction.X, direction.Y, direction.Z));
+                    if (neighborChunk != null)
+                    {
+                        if (neighborChunk.chunkData[wrappedNeighborX, neighborY, wrappedNeighborZ] == waterBlock)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+
+
+        private Chunk GetNeighborChunk(Vector3 direction)
+        {
+            Vector3 neighborChunkPos = Transform.Position + direction * VoxelSize * ChunkBounds.X;
+            if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
+            {
+                Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
+                return neighborChunk;
+            }
+
+            return null;
+        }
+
+
+
+        private void UpdateNeighborChunks()
+        {
+            Vector3[] neighborOffsets = new Vector3[]
+            {
+                new Vector3(-1, 0, 0) * VoxelSize * ChunkBounds.X,
+                new Vector3(1, 0, 0) * VoxelSize * ChunkBounds.X,
+                new Vector3(0, 0, -1) * VoxelSize * ChunkBounds.Z,
+                new Vector3(0, 0, 1) * VoxelSize * ChunkBounds.Z
+            };
+
+            foreach (var offset in neighborOffsets)
+            {
+                Vector3 neighborChunkPos = Transform.Position + offset;
+
+                if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
+                {
+                    Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
+                    if (neighborChunk != null)
+                    {
+                        neighborChunk.GenerateChunk(false);
+                    }
+                }
+            }
+        }
+
 
         public void GenerateChunk(bool updateNeighbors)
         {
+            ChunkUpdate();
+
             List<VertexPositionNormalTexture> verticesOpaque = new List<VertexPositionNormalTexture>();
             List<short> indicesOpaque = new List<short>();
             List<VertexPositionNormalTexture> verticesTransparent = new List<VertexPositionNormalTexture>();
@@ -230,7 +399,7 @@ namespace Engine.Components
                     {
                         if (chunkData[x, y, z] != 0)
                         {
-                            List<Face> exposedFaces = GetExposedFaces(x, y, z);
+                            List<Face> exposedFaces = GetExposedFaces(x, y, z, chunkData[x,y,z]);
                             foreach (var face in exposedFaces)
                             {
                                 int texPos = TextureLookUp(chunkData[x, y, z], face);
@@ -264,11 +433,13 @@ namespace Engine.Components
             if (verticesOpaque.Count > 0)
             {
                 renderer.StaticMesh = PrimitiveModel.CreateStaticMesh(verticesOpaque.ToArray(), indicesOpaque.ToArray());
+                renderer.StaticMesh.CalculateBoundingSpheres(EngineManager.Instance.GraphicsDevice);
             }
 
             if (verticesTransparent.Count > 0)
             {
                 rendererTransparent.StaticMesh = PrimitiveModel.CreateStaticMesh(verticesTransparent.ToArray(), indicesTransparent.ToArray());
+                rendererTransparent.StaticMesh.CalculateBoundingSpheres(EngineManager.Instance.GraphicsDevice);
             }
 
             if (updateNeighbors)
@@ -278,32 +449,7 @@ namespace Engine.Components
         }
 
 
-        private void UpdateNeighborChunks()
-        {
-            Vector3[] neighborOffsets = new Vector3[]
-            {
-                new Vector3(-1, 0, 0) * VoxelSize * ChunkBounds.X,
-                new Vector3(1, 0, 0) * VoxelSize * ChunkBounds.X,
-                new Vector3(0, 0, -1) * VoxelSize * ChunkBounds.Z,
-                new Vector3(0, 0, 1) * VoxelSize * ChunkBounds.Z
-            };
-
-            foreach (var offset in neighborOffsets)
-            {
-                Vector3 neighborChunkPos = Transform.Position + offset;
-
-                if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
-                {
-                    Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
-                    if (neighborChunk != null)
-                    {
-                        neighborChunk.GenerateChunk(false);
-                    }
-                }
-            }
-        }
-
-        private List<Face> GetExposedFaces(int x, int y, int z)
+        private List<Face> GetExposedFaces(int x, int y, int z, short BlockID)
         {
             bool IsTransparent = TransparentLookUp(chunkData[x, y, z]);
             List<Face> exposedFaces = new List<Face>();
@@ -317,23 +463,26 @@ namespace Engine.Components
             }
             else
             {
-                if (IsVisible(x, y - 1, z, IsTransparent)) exposedFaces.Add(Face.Bottom);
-                if (IsVisible(x, y + 1, z, IsTransparent)) exposedFaces.Add(Face.Top);
+                if (IsVisible(x, y - 1, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Bottom);
+                if (IsVisible(x, y + 1, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Top);
             }
 
-            if (IsVisible(x + 1, y, z, IsTransparent)) exposedFaces.Add(Face.Right);
-            if (IsVisible(x - 1, y, z, IsTransparent)) exposedFaces.Add(Face.Left);
-            if (IsVisible(x, y, z + 1, IsTransparent)) exposedFaces.Add(Face.Back);
-            if (IsVisible(x, y, z - 1, IsTransparent)) exposedFaces.Add(Face.Front);
+            if (IsVisible(x + 1, y, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Right);
+            if (IsVisible(x - 1, y, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Left);
+            if (IsVisible(x, y, z + 1, BlockID, IsTransparent)) exposedFaces.Add(Face.Back);
+            if (IsVisible(x, y, z - 1, BlockID, IsTransparent)) exposedFaces.Add(Face.Front);
 
             return exposedFaces;
         }
 
-        private bool IsVisible(int x, int y, int z, bool IsTransparent)
+        private bool IsVisible(int x, int y, int z, short blockID, bool isTransparent)
         {
             if (x >= 0 && x < ChunkBounds.X && y >= 0 && y < ChunkBounds.Y && z >= 0 && z < ChunkBounds.Z)
             {
-                return chunkData[x, y, z] == 0 || (TransparentLookUp(chunkData[x, y, z]) && !IsTransparent);
+                short neighborBlockID = chunkData[x, y, z];
+
+                return neighborBlockID == 0 ||
+                       (TransparentLookUp(neighborBlockID) && (neighborBlockID != blockID || !isTransparent));
             }
 
             // Handle neighboring chunks
@@ -351,14 +500,16 @@ namespace Engine.Components
                     short localY = (short)((y + ChunkBounds.Y) % ChunkBounds.Y);
                     short localZ = (short)((z + ChunkBounds.Z) % ChunkBounds.Z);
 
-                    return neighborChunk.chunkData[localX, localY, localZ] == 0 || 
-                        TransparentLookUp(neighborChunk.chunkData[localX, localY, localZ])
-                        && !IsTransparent;
+                    short neighborBlockID = neighborChunk.chunkData[localX, localY, localZ];
+
+                    return neighborBlockID == 0 ||
+                           (TransparentLookUp(neighborBlockID) && (neighborBlockID != blockID || !isTransparent));
                 }
             }
 
             return false;
         }
+
 
 
         public (VertexPositionNormalTexture[], short[]) CreateVoxel(Vector3 position, Vector3 scale, Face face, int texPos, int texSize = 16, int atlasSize = 256)
