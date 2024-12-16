@@ -29,43 +29,43 @@ public class ChunkManager : Component
         TotalSize = 16 * VoxelSize;
     }
 
-        public bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, out Vector3 hitPoint, out Vector3 hitVoxel, out Vector3 hitNormal)
+    public bool Raycast(Vector3 origin, Vector3 direction, float maxDistance, out Vector3 hitPoint, out Vector3 hitVoxel, out Vector3 hitNormal)
+    {
+        hitPoint = Vector3.Zero;
+        hitVoxel = Vector3.Zero;
+        hitNormal = Vector3.Zero;
+
+        float stepSize = .001f;
+        Vector3 currentPosition = origin + Vector3.One * VoxelSize / 2;
+        float traveledDistance = 0;
+
+        direction = Vector3.Normalize(direction);
+
+        while (traveledDistance <= maxDistance)
         {
-            hitPoint = Vector3.Zero;
-            hitVoxel = Vector3.Zero;
-            hitNormal = Vector3.Zero;
-
-            float stepSize = .001f;
-            Vector3 currentPosition = origin + Vector3.One * VoxelSize / 2;
-            float traveledDistance = 0;
-
-            direction = Vector3.Normalize(direction);
-
-            while (traveledDistance <= maxDistance)
+            Vector3 chunkPosition = GetChunkPosition(currentPosition);
+            if (ChunkEntities.TryGetValue(chunkPosition, out Entity chunkEntity))
             {
-                Vector3 chunkPosition = GetChunkPosition(currentPosition);
-                if (ChunkEntities.TryGetValue(chunkPosition, out Entity chunkEntity))
+                Chunk chunk = ECSManager.Instance.GetComponent<Chunk>(chunkEntity);
+                if (chunk != null)
                 {
-                    Chunk chunk = ECSManager.Instance.GetComponent<Chunk>(chunkEntity);
-                    if (chunk != null)
+                    Vector3 localVoxelPosition = GetLocalVoxelPosition(chunkPosition, currentPosition);
+                    if (chunk.IsVoxelSolid(localVoxelPosition))
                     {
-                        Vector3 localVoxelPosition = GetLocalVoxelPosition(chunkPosition, currentPosition);
-                        if (chunk.IsVoxelSolid(localVoxelPosition))
-                        {
-                            hitPoint = currentPosition;
-                            hitVoxel = localVoxelPosition;
-                            hitNormal = GetNormal(hitVoxel);
-                            return true;
-                        }
+                        hitPoint = currentPosition;
+                        hitVoxel = localVoxelPosition;
+                        hitNormal = GetNormal(hitVoxel);
+                        return true;
                     }
                 }
-
-                currentPosition += direction * stepSize;
-                traveledDistance += stepSize;
             }
 
-            return false;
+            currentPosition += direction * stepSize;
+            traveledDistance += stepSize;
         }
+
+        return false;
+    }
     public Vector3 GetNormal(Vector3 hitVoxel)
     {
         Vector3 voxelCenter = Vector3.Floor(hitVoxel) + Vector3.One * VoxelSize / 2;
@@ -131,6 +131,12 @@ public class ChunkManager : Component
             MathF.Floor(worldPosition.Y / ChunkBounds.Y) * ChunkBounds.Y,
             MathF.Floor(worldPosition.Z / TotalSize) * TotalSize
         );
+    }
+    public bool IsWithinChunkBounds(Vector3 voxelPosition)
+    {
+        return voxelPosition.X >= 0 && voxelPosition.X < ChunkBounds.X &&
+               voxelPosition.Y >= 0 && voxelPosition.Y < ChunkBounds.Y &&
+               voxelPosition.Z >= 0 && voxelPosition.Z < ChunkBounds.Z;
     }
 
     public Vector3 GetLocalVoxelPosition(Vector3 chunkPosition, Vector3 worldPosition)

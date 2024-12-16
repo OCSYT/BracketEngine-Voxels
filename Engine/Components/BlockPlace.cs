@@ -30,7 +30,6 @@ namespace Engine.Components
 
         public override void FixedUpdate(GameTime gameTime)
         {
-            // Check for raycast hit
             if (Manager.Raycast(Cam.Transform.Position, Cam.Transform.Forward, 10, out Vector3 hit, out Vector3 hitVoxel, out Vector3 hitNormal))
             {
                 if (EngineManager.Instance.IsActive)
@@ -39,27 +38,38 @@ namespace Engine.Components
                 }
             }
 
-            // Handle block type switching with keyboard input
             HandleBlockSwitching();
         }
 
         private void HandleRaycastHit(Vector3 hit, Vector3 hitVoxel, Vector3 hitNormal)
         {
-            // Handle right mouse button for placing blocks
             if (Mouse.GetState().RightButton == ButtonState.Pressed && !RPressed)
             {
                 RPressed = true;
-                BlockType currentBlock = BlockTypes[CurrentBlockIndex];
                 Chunk hitChunk = Manager.GetChunkAtWorldPosition(hit);
                 if (hitChunk != null)
                 {
                     hitVoxel += hitNormal;
                     hitVoxel = Vector3.Floor(hitVoxel);
-                    hitChunk.chunkData[(int)hitVoxel.X, (int)hitVoxel.Y, (int)hitVoxel.Z] = currentBlock.Id;
-                    hitChunk.GenerateChunk(true);
-                    Manager.UpdateChunkCache(hitChunk.Transform.Position, hitChunk.chunkData);
+
+                    try
+                    {
+                        hitChunk.chunkData[(int)hitVoxel.X, (int)hitVoxel.Y, (int)hitVoxel.Z] = BlockTypes[CurrentBlockIndex].Id;
+                        hitChunk.GenerateChunk(true);
+                    }
+                    catch
+                    {
+                        Chunk neighborChunk = Manager.GetChunkAtWorldPosition(hit + hitNormal);
+                        if (neighborChunk != null)
+                        {
+                            Vector3 neighborVoxelPosition = Manager.GetLocalVoxelPosition(neighborChunk.Transform.Position, hit + hitNormal);
+                            neighborChunk.chunkData[(int)neighborVoxelPosition.X, (int)neighborVoxelPosition.Y, (int)neighborVoxelPosition.Z] = BlockTypes[CurrentBlockIndex].Id;
+                            neighborChunk.GenerateChunk(true);
+                        }
+                    }
                 }
             }
+
             else if (Mouse.GetState().RightButton == ButtonState.Released && RPressed)
             {
                 RPressed = false;
