@@ -24,7 +24,7 @@ namespace Engine.Game
         private LightComponent DirectionalLight;
         public override void Awake()
         {
-            //Debug = true;
+            Debug = false;
         }
         public override void Start()
         {

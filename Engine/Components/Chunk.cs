@@ -22,7 +22,12 @@ namespace Engine.Components
         public ChunkManager Manager;
         private MeshRenderer renderer;
         private Dictionary<int, MeshRenderer> transparentRenderers = new Dictionary<int, MeshRenderer>();
-        private static int TransparentLayers = 2;
+        public static int TransparentLayers = 2;
+        public static DepthStencilState[] DepthMode =
+        {
+            DepthStencilState.Default,
+            DepthStencilState.DepthRead,
+        };
         public short[,,] chunkData = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
         public float WaterHeight = 10;
         int TextureLookUp(int BlockID, Face Face)
@@ -77,6 +82,10 @@ namespace Engine.Components
             {
                 return 49;
             }
+            if(BlockID == 11) //Tall grass
+            {
+                return 39;
+            }
             return BlockID;
         }
         bool TransparentLookUp(int BlockID)
@@ -93,6 +102,10 @@ namespace Engine.Components
             {
                 return true;
             }
+            if(BlockID == 11)
+            {
+                return true;
+            }
             return false;
         }
 
@@ -100,10 +113,11 @@ namespace Engine.Components
         {
             return BlockID switch
             {
-                6 => 2,
+                6 => 0,
                 8 => 1,
-                10 => 2,
-                _ => 1 
+                10 => 0,
+                11 => 0,
+                _ => 0 
             };
         }
 
@@ -121,6 +135,15 @@ namespace Engine.Components
             return true;
         }
 
+        bool BillboardLookUp(int BlockID)
+        {
+            if (BlockID == 11)
+            {
+                return true;
+            }
+            return false;
+        }
+
         public bool IsVoxelSolid(Vector3 localPosition)
         {
             if (localPosition.X >= 0 && localPosition.X < ChunkBounds.X && localPosition.Y >= 0 && localPosition.Y < ChunkBounds.Y && localPosition.Z >= 0 && localPosition.Z < ChunkBounds.Z)
@@ -135,12 +158,12 @@ namespace Engine.Components
             Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
             renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
-            for (int layer = 0; layer <= TransparentLayers; layer++)
+            for (int layer = 0; layer < TransparentLayers; layer++)
             {
                 MeshRenderer transparentRenderer = new MeshRenderer(
                     new StaticMesh(),
                     [new Material { DiffuseTexture = ChunkTex, Transparent = true, SortOrder = layer + 2,
-                    DepthStencilState = DepthStencilState.DepthRead }]
+                    DepthStencilState = DepthMode[layer] }]
                 );
                 ECSManager.Instance.AddComponent(Entity, transparentRenderer);
 
@@ -191,8 +214,11 @@ namespace Engine.Components
                             {
                                 int texPos = TextureLookUp(chunkData[x, y, z], face);
                                 bool isTransparent = TransparentLookUp(chunkData[x, y, z]);
+                                bool isBillboard = BillboardLookUp(chunkData[x, y, z]);
 
-                                var (voxelVertices, voxelIndices) = CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, texPos);
+                                var (voxelVertices, voxelIndices) = isBillboard == false ? 
+                                    CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, texPos)
+                                    : CreateBillboard(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, texPos);
 
                                 if (isTransparent)
                                 {
@@ -310,6 +336,87 @@ namespace Engine.Components
             }
 
             return false;
+        }
+
+
+        public (VertexPositionNormalTexture[], short[]) CreateBillboard(Vector3 position, Vector3 scale, int texPos, int texSize = 16, int atlasSize = 256)
+        {
+            float width = scale.X / 2;
+            float height = scale.Y / 2;
+
+            var vertices = new List<VertexPositionNormalTexture>();
+            var indices = new List<short>();
+
+            int column = (texPos % (atlasSize / texSize));
+            int row = (texPos / (atlasSize / texSize));
+            float texUnit = 1f / atlasSize;
+            float uStart = column * texSize * texUnit;
+            float vStart = row * texSize * texUnit;
+            float uEnd = uStart + texSize * texUnit;
+            float vEnd = vStart + texSize * texUnit;
+
+            // UV coordinates
+            Vector2 uv1 = new Vector2(uStart, vEnd);
+            Vector2 uv2 = new Vector2(uEnd, vEnd);
+            Vector2 uv3 = new Vector2(uEnd, vStart);
+            Vector2 uv4 = new Vector2(uStart, vStart);
+
+            // Define offsets for two quads
+            Vector3[] quad1Front = new[]
+            {
+        new Vector3(-width, -height, -width), // Bottom-left
+        new Vector3(width, -height, width),  // Bottom-right
+        new Vector3(width, height, width),   // Top-right
+        new Vector3(-width, height, -width)  // Top-left
+    };
+
+            Vector3[] quad1Back = new[]
+            {
+                quad1Front[0], quad1Front[3], quad1Front[2], quad1Front[1]
+            };
+
+            Vector3[] quad2Front = new[]
+            {
+                new Vector3(-width, -height, width), // Bottom-left
+                new Vector3(width, -height, -width), // Bottom-right
+                new Vector3(width, height, -width),  // Top-right
+                new Vector3(-width, height, width)   // Top-left
+            };
+
+            Vector3[] quad2Back = new[]
+            {
+                quad2Front[0], quad2Front[3], quad2Front[2], quad2Front[1]
+            };
+
+            Vector3 normal1 = -Vector3.Forward;
+            Vector3 normal2 = -Vector3.Forward;
+            Vector3 normalBack1 = Vector3.Forward;
+            Vector3 normalBack2 = Vector3.Forward;
+
+
+            AddBillboardQuad(vertices, indices, position, quad1Front, uv1, uv2, uv3, uv4, normal1);
+            AddBillboardQuad(vertices, indices, position, quad1Back, uv2, uv3, uv4, uv1, normalBack1);
+            AddBillboardQuad(vertices, indices, position, quad2Front, uv1, uv2, uv3, uv4, normal2);
+            AddBillboardQuad(vertices, indices, position, quad2Back, uv2, uv3, uv4, uv1, normalBack2);
+
+
+            return (vertices.ToArray(), indices.ToArray());
+        }
+
+        private void AddBillboardQuad(List<VertexPositionNormalTexture> vertices, List<short> indices, Vector3 position, Vector3[] offsets, Vector2 uv1, Vector2 uv2, Vector2 uv3, Vector2 uv4, Vector3 normal)
+        {
+            short startIndex = (short)vertices.Count;
+
+            vertices.Add(new VertexPositionNormalTexture(position + offsets[0], normal, uv1));
+            vertices.Add(new VertexPositionNormalTexture(position + offsets[1], normal, uv2));
+            vertices.Add(new VertexPositionNormalTexture(position + offsets[2], normal, uv3));
+            vertices.Add(new VertexPositionNormalTexture(position + offsets[3], normal, uv4));
+
+            indices.AddRange(new short[]
+            {
+        (short)(startIndex + 0), (short)(startIndex + 2), (short)(startIndex + 3),
+        (short)(startIndex + 0), (short)(startIndex + 1), (short)(startIndex + 2)
+            });
         }
 
 
@@ -487,7 +594,17 @@ namespace Engine.Components
                         {
                             if (chunkData[x, y, z] == 1)
                             {
-                                PlaceTree(x, y, z, random);
+                                if(random.NextDouble() > .5f)
+                                {
+                                    if(y + 1  < ChunkBounds.Y)
+                                    {
+                                        chunkData[x, y+1, z] = 11;
+                                    }
+                                }
+                                else
+                                {
+                                    PlaceTree(x, y, z, random);
+                                }
                             }
                         }
                     }
