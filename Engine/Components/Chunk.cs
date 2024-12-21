@@ -31,6 +31,7 @@ namespace Engine.Components
         public short[,,] chunkData = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
         public short[,,] lightDataSun = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
         public float WaterHeight = 10;
+        public short MaxSunLight = 15;
         int TextureLookUp(int BlockID, Face Face)
         {
             if (BlockID == 1) // Grass
@@ -157,13 +158,13 @@ namespace Engine.Components
         public override void Awake()
         {
             Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
-            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex , VertexColors = true }]);
+            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex, Lighting = true, VertexColors = true }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
             for (int layer = 0; layer < TransparentLayers; layer++)
             {
                 MeshRenderer transparentRenderer = new MeshRenderer(
                     new StaticMesh(),
-                    [new Material { DiffuseTexture = ChunkTex, Transparent = true, VertexColors = true, SortOrder = layer + 2,
+                    [new Material { DiffuseTexture = ChunkTex, Transparent = true, VertexColors = true, Lighting = true, SortOrder = layer + 2,
                     DepthStencilState = DepthMode[layer] }]
                 );
                 ECSManager.Instance.AddComponent(Entity, transparentRenderer);
@@ -184,8 +185,7 @@ namespace Engine.Components
             {
                 for (int z = 0; z < ChunkBounds.Z; z++)
                 {
-                    short MaxSunLight = 15;
-                    short PrevSunLight = 15;
+                    short PrevSunLight = MaxSunLight;
                     bool Exposed = true;
 
                     for (int y = (int)ChunkBounds.Y - 1; y >= 0; y--)
@@ -256,7 +256,8 @@ namespace Engine.Components
                     {
                         if (chunkData[x, y, z] != 0)
                         {
-                            float VoxelColor = lightDataSun[x, y, z] / 15.0f;
+                            float VoxelColor = (lightDataSun[x, y, z]) / (float)MaxSunLight;
+                            
                             List<Face> exposedFaces = GetExposedFaces(x, y, z, chunkData[x, y, z]);
                             foreach (var face in exposedFaces)
                             {

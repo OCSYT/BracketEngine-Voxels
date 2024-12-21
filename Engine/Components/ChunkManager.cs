@@ -8,6 +8,9 @@ using System.Diagnostics;
 using Microsoft.Xna.Framework.Input;
 using Myra.Graphics2D.UI;
 using Engine.Core;
+using Engine.Core.Components.Rendering;
+using System.Threading.Tasks;
+using System.Linq;
 
 public class ChunkManager : Component
 {
@@ -18,10 +21,8 @@ public class ChunkManager : Component
     public int VoxelSize { get; set; } = 1;
     public Vector3 ChunkBounds { get; set; } = new Vector3(16, 128, 16);
     private float RenderDistance { get; set; } = 8;
-
     private List<Vector3> ChunkCreationQueue { get; set; } = new List<Vector3>();
     private HashSet<Vector3> EnqueuedChunks { get; set; } = new HashSet<Vector3>();
-
     public override void Start()
     {
         Chunk.VoxelSize = VoxelSize;
@@ -143,6 +144,8 @@ public class ChunkManager : Component
     {
         return Vector3.Clamp(worldPosition - chunkPosition * VoxelSize, Vector3.Zero, ChunkBounds);
     }
+
+
 
     public override void FixedUpdate(GameTime gameTime)
     {
