@@ -29,6 +29,7 @@ namespace Engine.Components
             DepthStencilState.DepthRead,
         };
         public short[,,] chunkData = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
+        public short[,,] lightDataSun = new short[(short)ChunkBounds.X, (short)ChunkBounds.Y, (short)ChunkBounds.Z];
         public float WaterHeight = 10;
         int TextureLookUp(int BlockID, Face Face)
         {
@@ -156,13 +157,13 @@ namespace Engine.Components
         public override void Awake()
         {
             Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
-            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex }]);
+            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex , VertexColors = true }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
             for (int layer = 0; layer < TransparentLayers; layer++)
             {
                 MeshRenderer transparentRenderer = new MeshRenderer(
                     new StaticMesh(),
-                    [new Material { DiffuseTexture = ChunkTex, Transparent = true, SortOrder = layer + 2,
+                    [new Material { DiffuseTexture = ChunkTex, Transparent = true, VertexColors = true, SortOrder = layer + 2,
                     DepthStencilState = DepthMode[layer] }]
                 );
                 ECSManager.Instance.AddComponent(Entity, transparentRenderer);
@@ -177,19 +178,65 @@ namespace Engine.Components
             //Console.WriteLine("Destroyed chunk at position: " + Transform.Position);
         }
 
+        public void GenerateSunLighting()
+        {
+            Parallel.For(0, (int)ChunkBounds.X, x =>
+            {
+                for (int z = 0; z < ChunkBounds.Z; z++)
+                {
+                    short MaxSunLight = 15;
+                    short PrevSunLight = 15;
+                    bool Exposed = true;
+
+                    for (int y = (int)ChunkBounds.Y - 1; y >= 0; y--)
+                    {
+                        if (chunkData[x, y, z] != 0 && !TransparentLookUp(chunkData[x, y, z]))
+                        {
+                            if (Exposed)
+                            {
+                                lightDataSun[x, y, z] = MaxSunLight;
+                                PrevSunLight = MaxSunLight;
+                                Exposed = false;
+                            }
+                            else
+                            {
+                                PrevSunLight = (short)Math.Clamp(PrevSunLight - 1, 0, MaxSunLight);
+                                lightDataSun[x, y, z] = PrevSunLight;
+                            }
+                        }
+                        else
+                        {
+                            if (!Exposed)
+                            {
+                                lightDataSun[x, y, z] = MaxSunLight;
+                            }
+                            else
+                            {
+                                lightDataSun[x, y, z] = PrevSunLight;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+
+
         public void GenerateChunk(bool updateNeighbors)
         {
             ChunkUpdate();
+            GenerateSunLighting();
 
-            List<VertexPositionNormalTexture> verticesOpaque = new List<VertexPositionNormalTexture>();
+            List<Material.VertexPositionNormalTextureColor> verticesOpaque = new List<Material.VertexPositionNormalTextureColor>();
             List<short> indicesOpaque = new List<short>();
 
-            Dictionary<int, List<VertexPositionNormalTexture>> layerVertices = new Dictionary<int, List<VertexPositionNormalTexture>>();
+            Dictionary<int, List<Material.VertexPositionNormalTextureColor>> layerVertices = new Dictionary<int, List<Material.VertexPositionNormalTextureColor>>();
             Dictionary<int, List<short>> layerIndices = new Dictionary<int, List<short>>();
 
             foreach (var layer in transparentRenderers.Keys)
             {
-                layerVertices[layer] = new List<VertexPositionNormalTexture>();
+                layerVertices[layer] = new List<Material.VertexPositionNormalTextureColor>();
                 layerIndices[layer] = new List<short>();
             }
 
@@ -209,6 +256,7 @@ namespace Engine.Components
                     {
                         if (chunkData[x, y, z] != 0)
                         {
+                            float VoxelColor = lightDataSun[x, y, z] / 15.0f;
                             List<Face> exposedFaces = GetExposedFaces(x, y, z, chunkData[x, y, z]);
                             foreach (var face in exposedFaces)
                             {
@@ -217,8 +265,8 @@ namespace Engine.Components
                                 bool isBillboard = BillboardLookUp(chunkData[x, y, z]);
 
                                 var (voxelVertices, voxelIndices) = isBillboard == false ? 
-                                    CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, texPos)
-                                    : CreateBillboard(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, texPos);
+                                    CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, texPos, new Color(VoxelColor, VoxelColor, VoxelColor, VoxelColor))
+                                    : CreateBillboard(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, texPos, new Color(VoxelColor, VoxelColor, VoxelColor, VoxelColor));
 
                                 if (isTransparent)
                                 {
@@ -339,12 +387,12 @@ namespace Engine.Components
         }
 
 
-        public (VertexPositionNormalTexture[], short[]) CreateBillboard(Vector3 position, Vector3 scale, int texPos, int texSize = 16, int atlasSize = 256)
+        public (Material.VertexPositionNormalTextureColor[], short[]) CreateBillboard(Vector3 position, Vector3 scale, int texPos, Color color, int texSize = 16, int atlasSize = 256)
         {
             float width = scale.X / 2;
             float height = scale.Y / 2;
 
-            var vertices = new List<VertexPositionNormalTexture>();
+            var vertices = new List<Material.VertexPositionNormalTextureColor>();
             var indices = new List<short>();
 
             int column = (texPos % (atlasSize / texSize));
@@ -394,23 +442,23 @@ namespace Engine.Components
             Vector3 normalBack2 = Vector3.Forward;
 
 
-            AddBillboardQuad(vertices, indices, position, quad1Front, uv1, uv2, uv3, uv4, normal1);
-            AddBillboardQuad(vertices, indices, position, quad1Back, uv2, uv3, uv4, uv1, normalBack1);
-            AddBillboardQuad(vertices, indices, position, quad2Front, uv1, uv2, uv3, uv4, normal2);
-            AddBillboardQuad(vertices, indices, position, quad2Back, uv2, uv3, uv4, uv1, normalBack2);
+            AddBillboardQuad(vertices, indices, position, quad1Front, uv1, uv2, uv3, uv4, normal1, color);
+            AddBillboardQuad(vertices, indices, position, quad1Back, uv2, uv3, uv4, uv1, normalBack1, color);
+            AddBillboardQuad(vertices, indices, position, quad2Front, uv1, uv2, uv3, uv4, normal2, color);
+            AddBillboardQuad(vertices, indices, position, quad2Back, uv2, uv3, uv4, uv1, normalBack2, color);
 
 
             return (vertices.ToArray(), indices.ToArray());
         }
 
-        private void AddBillboardQuad(List<VertexPositionNormalTexture> vertices, List<short> indices, Vector3 position, Vector3[] offsets, Vector2 uv1, Vector2 uv2, Vector2 uv3, Vector2 uv4, Vector3 normal)
+        private void AddBillboardQuad(List<Material.VertexPositionNormalTextureColor> vertices, List<short> indices, Vector3 position, Vector3[] offsets, Vector2 uv1, Vector2 uv2, Vector2 uv3, Vector2 uv4, Vector3 normal, Color color)
         {
             short startIndex = (short)vertices.Count;
 
-            vertices.Add(new VertexPositionNormalTexture(position + offsets[0], normal, uv1));
-            vertices.Add(new VertexPositionNormalTexture(position + offsets[1], normal, uv2));
-            vertices.Add(new VertexPositionNormalTexture(position + offsets[2], normal, uv3));
-            vertices.Add(new VertexPositionNormalTexture(position + offsets[3], normal, uv4));
+            vertices.Add(new Material.VertexPositionNormalTextureColor(position + offsets[0], normal, uv1, color));
+            vertices.Add(new Material.VertexPositionNormalTextureColor(position + offsets[1], normal, uv2, color));
+            vertices.Add(new Material.VertexPositionNormalTextureColor(position + offsets[2], normal, uv3, color));
+            vertices.Add(new Material.VertexPositionNormalTextureColor(position + offsets[3], normal, uv4, color));
 
             indices.AddRange(new short[]
             {
@@ -421,13 +469,13 @@ namespace Engine.Components
 
 
 
-        public (VertexPositionNormalTexture[], short[]) CreateVoxel(Vector3 position, Vector3 scale, Face face, int texPos, int texSize = 16, int atlasSize = 256)
+        public (Material.VertexPositionNormalTextureColor[], short[]) CreateVoxel(Vector3 position, Vector3 scale, Face face, int texPos, Color color, int texSize = 16, int atlasSize = 256)
         {
             float width = scale.X / 2;
             float height = scale.Y / 2;
             float depth = scale.Z / 2;
 
-            var vertices = new VertexPositionNormalTexture[4];
+            var vertices = new Material.VertexPositionNormalTextureColor[4];
             var indices = new short[] { 0, 2, 3, 0, 1, 2 };
 
             Vector3 offset1, offset2, offset3, offset4;
@@ -504,17 +552,17 @@ namespace Engine.Components
             // Assign vertices based on flip
             if (flip)
             {
-                vertices[0] = new VertexPositionNormalTexture(position + offset4, normal, uv4);
-                vertices[1] = new VertexPositionNormalTexture(position + offset3, normal, uv3);
-                vertices[2] = new VertexPositionNormalTexture(position + offset2, normal, uv2);
-                vertices[3] = new VertexPositionNormalTexture(position + offset1, normal, uv1);
+                vertices[0] = new Material.VertexPositionNormalTextureColor(position + offset4, normal, uv4, color);
+                vertices[1] = new Material.VertexPositionNormalTextureColor(position + offset3, normal, uv3, color);
+                vertices[2] = new Material.VertexPositionNormalTextureColor(position + offset2, normal, uv2, color);
+                vertices[3] = new Material.VertexPositionNormalTextureColor(position + offset1, normal, uv1, color);
             }
             else
             {
-                vertices[0] = new VertexPositionNormalTexture(position + offset1, normal, uv1);
-                vertices[1] = new VertexPositionNormalTexture(position + offset2, normal, uv2);
-                vertices[2] = new VertexPositionNormalTexture(position + offset3, normal, uv3);
-                vertices[3] = new VertexPositionNormalTexture(position + offset4, normal, uv4);
+                vertices[0] = new Material.VertexPositionNormalTextureColor(position + offset1, normal, uv1, color);
+                vertices[1] = new Material.VertexPositionNormalTextureColor(position + offset2, normal, uv2, color);
+                vertices[2] = new Material.VertexPositionNormalTextureColor(position + offset3, normal, uv3, color);
+                vertices[3] = new Material.VertexPositionNormalTextureColor(position + offset4, normal, uv4, color);
             }
 
             return (vertices, indices);
@@ -594,11 +642,11 @@ namespace Engine.Components
                         {
                             if (chunkData[x, y, z] == 1)
                             {
-                                if(random.NextDouble() > .5f)
+                                if(random.NextDouble() > .9f)
                                 {
                                     if(y + 1  < ChunkBounds.Y)
                                     {
-                                        chunkData[x, y+1, z] = 11;
+                                        chunkData[x, y+1, z] = 11; //Grass
                                     }
                                 }
                                 else

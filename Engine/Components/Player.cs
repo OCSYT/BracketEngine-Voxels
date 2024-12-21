@@ -15,7 +15,7 @@ namespace Engine.Components
         public float Sensitivity = 1;
         private float MouseX = 0;
         private float MouseY = 0;
-        public float Speed = 25;
+        public float Speed = 15;
         private Vector3 ForwardDir = Vector3.Forward;
         private Vector3 RightDir = Vector3.Right;
         public Player()

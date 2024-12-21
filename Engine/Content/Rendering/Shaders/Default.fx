@@ -3,6 +3,7 @@ float4x4 View;
 float4x4 Projection;
 float Alpha = 1;
 int Lighting = 1;
+int VertexColors = 0;
 
 Texture2D DiffuseTexture;
 sampler2D DiffuseTextureSampler = sampler_state
@@ -105,7 +106,14 @@ float4 PS(VertexOutput input) : COLOR
     }
 
     LightColor = clamp(LightColor, 0.0, 1.0);
-    float3 finalColor = (textureColor.rgb * DiffuseColor.rgb * LightColor.rgb) + (emissiontexColor.rgb * EmissionColor.rgb);
+    
+    float3 VertColor = float3(1,1,1);
+    if (VertexColors == 1)
+    {
+        VertColor = input.Color.rgb;
+    }
+    
+    float3 finalColor = (textureColor.rgb * DiffuseColor.rgb * LightColor * VertColor) + (emissiontexColor.rgb * EmissionColor.rgb);
 
     float alpha = clamp(Alpha * textureColor.a * DiffuseColor.a, 0, 1);
     
