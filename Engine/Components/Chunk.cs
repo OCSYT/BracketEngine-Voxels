@@ -190,25 +190,20 @@ namespace Engine.Components
 
                     for (int y = (int)ChunkBounds.Y - 1; y >= 0; y--)
                     {
-                        if (chunkData[x, y, z] != 0 && !TransparentLookUp(chunkData[x, y, z]))
+                        if (chunkData[x, y, z] != 0)
                         {
-                            if (Exposed)
-                            {
-                                lightDataSun[x, y, z] = MaxSunLight;
-                                PrevSunLight = MaxSunLight;
-                                Exposed = false;
-                            }
-                            else
-                            {
-                                PrevSunLight = (short)Math.Clamp(PrevSunLight - 1, 0, MaxSunLight);
-                                lightDataSun[x, y, z] = PrevSunLight;
-                            }
+                            Exposed = false;
+                        }
+                        if (Exposed)
+                        {
+                            lightDataSun[x, y, z] = MaxSunLight;
                         }
                         else
                         {
-                            if (!Exposed)
+                            if (chunkData[x, y, z] != 0)
                             {
-                                lightDataSun[x, y, z] = MaxSunLight;
+                                PrevSunLight = (short)Math.Clamp(PrevSunLight - 1, 0, MaxSunLight);
+                                lightDataSun[x, y, z] = PrevSunLight;
                             }
                             else
                             {
@@ -220,7 +215,107 @@ namespace Engine.Components
             });
         }
 
+        public float GetColor(int x, int y, int z, Face face)
+        {
+            Vector3 direction;
+            switch (face)
+            {
+                case Face.Front:
+                    direction = new Vector3(0, 0, -1);
+                    break;
+                case Face.Back:
+                    direction = new Vector3(0, 0, 1);
+                    break;
+                case Face.Left:
+                    direction = new Vector3(-1, 0, 0);
+                    break;
+                case Face.Right:
+                    direction = new Vector3(1, 0, 0);
+                    break;
+                case Face.Top:
+                    direction = new Vector3(0, 1, 0);
+                    break;
+                case Face.Bottom:
+                    direction = new Vector3(0, -1, 0);
+                    break;
+                default:
+                    throw new ArgumentException("Invalid face value", nameof(face));
+            }
 
+            if (x + direction.X < 0 || x + direction.X >= ChunkBounds.X || y + direction.Y < 0 || y + direction.Y >= ChunkBounds.Y || z + direction.Z < 0 || z + direction.Z >= ChunkBounds.Z)
+            {
+                // If out of bounds, attempt to fetch light data from the neighbor chunk
+                Chunk neighborChunk = GetNeighborChunk(direction);
+                if (neighborChunk != null)
+                {
+                    switch (face)
+                    {
+                        case Face.Front:
+                            return (neighborChunk.lightDataSun[x, y, (int)((z - 1 + ChunkBounds.Z) % ChunkBounds.Z)]) / (float)MaxSunLight;
+                        case Face.Back:
+                            return (neighborChunk.lightDataSun[x, y, (int)((z + 1) % ChunkBounds.Z)]) / (float)MaxSunLight;
+                        case Face.Left:
+                            return (neighborChunk.lightDataSun[(int)((x - 1 + ChunkBounds.X) % ChunkBounds.X), y, z]) / (float)MaxSunLight;
+                        case Face.Right:
+                            return (neighborChunk.lightDataSun[(int)((x + 1) % ChunkBounds.X), y, z]) / (float)MaxSunLight;
+                        default:
+                            throw new ArgumentException("Invalid face value", nameof(face));
+                    }
+                }
+                else
+                {
+                    // If no neighboring chunk is found, return 0
+                    return lightDataSun[x,y,z];
+                }
+            }
+
+            float color = 0;
+
+            switch (face)
+            {
+                case Face.Front:
+                    if (z - 1 >= 0)
+                    {
+                        color = (lightDataSun[x, y, z - 1]) / (float)MaxSunLight;
+                    }
+                    break;
+                case Face.Back:
+                    if (z + 1 < ChunkBounds.Z)
+                    {
+                        color = (lightDataSun[x, y, z + 1]) / (float)MaxSunLight;
+                    }
+                    break;
+                case Face.Left:
+                    if (x - 1 >= 0)
+                    {
+                        color = (lightDataSun[(int)((x - 1 + ChunkBounds.X) % ChunkBounds.X), y, z]) / (float)MaxSunLight;
+                    }
+                    break;
+                case Face.Right:
+                    if (x + 1 < ChunkBounds.X)
+                    {
+                        color = (lightDataSun[(int)((x + 1) % ChunkBounds.X), y, z]) / (float)MaxSunLight;
+                    }
+                    break;
+                case Face.Top:
+                    if (y + 1 < ChunkBounds.Y)
+                    {
+                        color = (lightDataSun[x, y + 1, z]) / (float)MaxSunLight;
+                    }
+                    break;
+                case Face.Bottom:
+                    if (y - 1 >= 0)
+                    {
+                        color = (lightDataSun[x, y - 1, z]) / (float)MaxSunLight;
+                    }
+                    break;
+                default:
+                    throw new ArgumentException("Invalid face value", nameof(face));
+            }
+
+            // Clamp the color value between 0 and 1
+            return Math.Clamp(color, .1f, 1);
+        }
 
 
         public void GenerateChunk(bool updateNeighbors)
@@ -256,7 +351,6 @@ namespace Engine.Components
                     {
                         if (chunkData[x, y, z] != 0)
                         {
-                            float VoxelColor = (lightDataSun[x, y, z]) / (float)MaxSunLight;
                             
                             List<Face> exposedFaces = GetExposedFaces(x, y, z, chunkData[x, y, z]);
                             foreach (var face in exposedFaces)
@@ -264,6 +358,8 @@ namespace Engine.Components
                                 int texPos = TextureLookUp(chunkData[x, y, z], face);
                                 bool isTransparent = TransparentLookUp(chunkData[x, y, z]);
                                 bool isBillboard = BillboardLookUp(chunkData[x, y, z]);
+
+                                float VoxelColor = GetColor(x, y, z, face);
 
                                 var (voxelVertices, voxelIndices) = isBillboard == false ? 
                                     CreateVoxel(new Vector3(x, y, z) * VoxelSize, Vector3.One * VoxelSize, face, texPos, new Color(VoxelColor, VoxelColor, VoxelColor, VoxelColor))
@@ -325,68 +421,6 @@ namespace Engine.Components
                 UpdateNeighborChunks();
             }
         }
-
-        private List<Face> GetExposedFaces(int x, int y, int z, short BlockID)
-        {
-            bool IsTransparent = TransparentLookUp(chunkData[x, y, z]);
-            List<Face> exposedFaces = new List<Face>();
-            if (y - 1 < 0)
-            {
-                exposedFaces.Add(Face.Bottom);
-            }
-            else if (y + 1 >= ChunkBounds.Y)
-            {
-                exposedFaces.Add(Face.Top);
-            }
-            else
-            {
-                if (IsVisible(x, y - 1, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Bottom);
-                if (IsVisible(x, y + 1, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Top);
-            }
-
-            if (IsVisible(x + 1, y, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Right);
-            if (IsVisible(x - 1, y, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Left);
-            if (IsVisible(x, y, z + 1, BlockID, IsTransparent)) exposedFaces.Add(Face.Back);
-            if (IsVisible(x, y, z - 1, BlockID, IsTransparent)) exposedFaces.Add(Face.Front);
-
-            return exposedFaces;
-        }
-
-        private bool IsVisible(int x, int y, int z, short blockID, bool isTransparent)
-        {
-            if (x >= 0 && x < ChunkBounds.X && y >= 0 && y < ChunkBounds.Y && z >= 0 && z < ChunkBounds.Z)
-            {
-                short neighborBlockID = chunkData[x, y, z];
-
-                return neighborBlockID == 0 ||
-                       (TransparentLookUp(neighborBlockID) && (neighborBlockID != blockID || !isTransparent));
-            }
-
-            // Handle neighboring chunks
-            int neighborChunkX = x < 0 ? -1 : x >= ChunkBounds.X ? 1 : 0;
-            int neighborChunkZ = z < 0 ? -1 : z >= ChunkBounds.Z ? 1 : 0;
-
-            Vector3 neighborChunkPos = Transform.Position + new Vector3(neighborChunkX * VoxelSize * ChunkBounds.X, 0, neighborChunkZ * VoxelSize * ChunkBounds.Z);
-
-            if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
-            {
-                Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
-                if (neighborChunk != null)
-                {
-                    short localX = (short)((x + ChunkBounds.X) % ChunkBounds.X);
-                    short localY = (short)((y + ChunkBounds.Y) % ChunkBounds.Y);
-                    short localZ = (short)((z + ChunkBounds.Z) % ChunkBounds.Z);
-
-                    short neighborBlockID = neighborChunk.chunkData[localX, localY, localZ];
-
-                    return neighborBlockID == 0 ||
-                           (TransparentLookUp(neighborBlockID) && (neighborBlockID != blockID || !isTransparent));
-                }
-            }
-
-            return false;
-        }
-
 
         public (Material.VertexPositionNormalTextureColor[], short[]) CreateBillboard(Vector3 position, Vector3 scale, int texPos, Color color, int texSize = 16, int atlasSize = 256)
         {
@@ -567,6 +601,68 @@ namespace Engine.Components
             }
 
             return (vertices, indices);
+        }
+
+
+        private List<Face> GetExposedFaces(int x, int y, int z, short BlockID)
+        {
+            bool IsTransparent = TransparentLookUp(chunkData[x, y, z]);
+            List<Face> exposedFaces = new List<Face>();
+            if (y - 1 < 0)
+            {
+                exposedFaces.Add(Face.Bottom);
+            }
+            else if (y + 1 >= ChunkBounds.Y)
+            {
+                exposedFaces.Add(Face.Top);
+            }
+            else
+            {
+                if (IsVisible(x, y - 1, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Bottom);
+                if (IsVisible(x, y + 1, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Top);
+            }
+
+            if (IsVisible(x + 1, y, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Right);
+            if (IsVisible(x - 1, y, z, BlockID, IsTransparent)) exposedFaces.Add(Face.Left);
+            if (IsVisible(x, y, z + 1, BlockID, IsTransparent)) exposedFaces.Add(Face.Back);
+            if (IsVisible(x, y, z - 1, BlockID, IsTransparent)) exposedFaces.Add(Face.Front);
+
+            return exposedFaces;
+        }
+
+        private bool IsVisible(int x, int y, int z, short blockID, bool isTransparent)
+        {
+            if (x >= 0 && x < ChunkBounds.X && y >= 0 && y < ChunkBounds.Y && z >= 0 && z < ChunkBounds.Z)
+            {
+                short neighborBlockID = chunkData[x, y, z];
+
+                return neighborBlockID == 0 ||
+                       (TransparentLookUp(neighborBlockID) && (neighborBlockID != blockID || !isTransparent));
+            }
+
+            // Handle neighboring chunks
+            int neighborChunkX = x < 0 ? -1 : x >= ChunkBounds.X ? 1 : 0;
+            int neighborChunkZ = z < 0 ? -1 : z >= ChunkBounds.Z ? 1 : 0;
+
+            Vector3 neighborChunkPos = Transform.Position + new Vector3(neighborChunkX * VoxelSize * ChunkBounds.X, 0, neighborChunkZ * VoxelSize * ChunkBounds.Z);
+
+            if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
+            {
+                Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
+                if (neighborChunk != null)
+                {
+                    short localX = (short)((x + ChunkBounds.X) % ChunkBounds.X);
+                    short localY = (short)((y + ChunkBounds.Y) % ChunkBounds.Y);
+                    short localZ = (short)((z + ChunkBounds.Z) % ChunkBounds.Z);
+
+                    short neighborBlockID = neighborChunk.chunkData[localX, localY, localZ];
+
+                    return neighborBlockID == 0 ||
+                           (TransparentLookUp(neighborBlockID) && (neighborBlockID != blockID || !isTransparent));
+                }
+            }
+
+            return false;
         }
 
 
@@ -798,7 +894,7 @@ namespace Engine.Components
 
         private Chunk GetNeighborChunk(Vector3 direction)
         {
-            Vector3 neighborChunkPos = Transform.Position + direction * VoxelSize * ChunkBounds.X;
+            Vector3 neighborChunkPos = Transform.Position + (direction * VoxelSize * ChunkBounds.X);
             if (Manager.ChunkEntities.TryGetValue(neighborChunkPos, out Entity neighborChunkEntity))
             {
                 Chunk neighborChunk = ECSManager.Instance.GetComponent<Chunk>(neighborChunkEntity);
