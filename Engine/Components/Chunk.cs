@@ -190,7 +190,7 @@ namespace Engine.Components
 
                     for (int y = (int)ChunkBounds.Y - 1; y >= 0; y--)
                     {
-                        if (chunkData[x, y, z] != 0)
+                        if (chunkData[x, y, z] != 0 && !TransparentLookUp(chunkData[x, y, z]))
                         {
                             Exposed = false;
                         }
@@ -200,7 +200,7 @@ namespace Engine.Components
                         }
                         else
                         {
-                            if (chunkData[x, y, z] != 0)
+                            if (chunkData[x, y, z] != 0 && !TransparentLookUp(chunkData[x, y, z]))
                             {
                                 PrevSunLight = (short)Math.Clamp(PrevSunLight - 1, 0, MaxSunLight);
                                 lightDataSun[x, y, z] = PrevSunLight;
