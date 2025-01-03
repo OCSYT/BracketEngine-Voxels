@@ -35,6 +35,15 @@ namespace Engine.Game
             };
             MainPanel.Widgets.Add(BlockLabel);
 
+            Label Crosshair = new Label
+            {
+                Text = "X",
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Scale = new Vector2(1, .75f),
+            };
+            MainPanel.Widgets.Add(Crosshair);
+
             UIDesktop = new Desktop();
             UIDesktop.Root = MainPanel;
 
