@@ -21,7 +21,6 @@ namespace Engine.Game
     {
         private Entity CameraEntity;
         private Entity PlayerEntity;
-        private LightComponent DirectionalLight;
         public override void Awake()
         {
             //Debug = true;
@@ -31,7 +30,7 @@ namespace Engine.Game
             LightManager.Instance.AmbientColor = new Color(.2f,.2f,.2f);
             CreateCamera();
             CreatePlayer();
-            DirectionalLight = CreateDirectionalLight();
+            CreateDirectionalLight();
             Entity ChunkEntity = ECSManager.Instance.CreateEntity();
             ChunkManager Manager = new ChunkManager
             {
