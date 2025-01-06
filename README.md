@@ -6,6 +6,7 @@
 
 ### Prerequisite
 Ensure you have [Visual C++ Redistributable Packages for Visual Studio 2013](https://www.microsoft.com/en-gb/download/details.aspx?id=40784) installed.
+Ensure you have [.NET 9.0 SDK](https://dotnet.microsoft.com/en-us/download) installed. 
 
 ### Visual Studio 2022
 1. Clone the repository.
@@ -20,6 +21,7 @@ Ensure you have [Visual C++ Redistributable Packages for Visual Studio 2013](htt
    - **C# Dev Kit Extension**
    - **C# Extension**
    - **.NET Install Tool Extension**
+   - **MonoGame Content Builder (Editor)**
 4. Build the project using `CTRL + ALT + B`.
 
 ---
