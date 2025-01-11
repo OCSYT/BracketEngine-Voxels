@@ -28,6 +28,13 @@ namespace Engine.Game
         public override void Start()
         {
             LightManager.Instance.AmbientColor = new Color(.2f,.2f,.2f);
+            Effect ACESToneMapper = Content.Load<Effect>("Rendering/Shaders/ACES");
+            PostFxManager.Instance.AddEffect(ACESToneMapper, new List<KeyValuePair<string, object>>() {
+                new ("Exposure", 1.2f),
+                new ("Gamma", 1)
+            });
+
+
             CreateCamera();
             CreatePlayer();
             CreateDirectionalLight();
