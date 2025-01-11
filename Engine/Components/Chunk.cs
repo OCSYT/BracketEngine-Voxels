@@ -158,13 +158,13 @@ namespace Engine.Components
         public override void Awake()
         {
             Texture2D ChunkTex = EngineManager.Instance.Content.Load<Texture2D>("GameContent/Textures/terrain");
-            renderer = new MeshRenderer(new StaticMesh(), [new Material { DiffuseTexture = ChunkTex, Lighting = true, VertexColors = true }]);
+            renderer = new MeshRenderer(new StaticMesh(), [new Material { BaseColorTexture = ChunkTex, Lighting = true, VertexColors = true }]);
             ECSManager.Instance.AddComponent(Entity, renderer);
             for (int layer = 0; layer < TransparentLayers; layer++)
             {
                 MeshRenderer transparentRenderer = new MeshRenderer(
                     new StaticMesh(),
-                    [new Material { DiffuseTexture = ChunkTex, Transparent = true, VertexColors = true, Lighting = true, SortOrder = layer + 2,
+                    [new Material { BaseColorTexture = ChunkTex, Transparent = true, VertexColors = true, Lighting = true, SortOrder = layer + 2,
                     DepthStencilState = DepthMode[layer] }]
                 );
                 ECSManager.Instance.AddComponent(Entity, transparentRenderer);
