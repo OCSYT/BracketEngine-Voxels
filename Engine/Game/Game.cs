@@ -34,7 +34,6 @@ namespace Engine.Game
                 new ("Gamma", 1)
             });
 
-
             CreateCamera();
             CreatePlayer();
             CreateDirectionalLight();
@@ -66,7 +65,7 @@ namespace Engine.Game
         {
             Graphics.GraphicsDevice.Clear(Color.CornflowerBlue);
             EngineManager.Instance.GraphicsDevice.SamplerStates[0] = SamplerState.PointClamp;
-            BasicEffect Effect = new BasicEffect(Graphics.GraphicsDevice) { AmbientLightColor = Vector3.One / 4 };
+            BasicEffect Effect = new BasicEffect(Graphics.GraphicsDevice);
             Camera CameraObj = ECSManager.Instance.GetComponent<Camera>(CameraEntity);
 
             if (CameraObj != null)
